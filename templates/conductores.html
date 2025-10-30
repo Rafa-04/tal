@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Conductores{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-id-card"></i> Conductores Registrados</h2>
+<button class="btn" onclick="window.location.href='/registrar-conductor'"><i class="fas fa-plus"></i> Nuevo Conductor</button>
+
+<div id="loading" style="text-align: center; padding: 20px;">
+    <i class="fas fa-spinner fa-spin"></i> Cargando conductores...
+</div>
+
+<div id="conductores-container" style="display: none;">
+    <table id="conductores-table">
+        <tr>
+            <th>#</th>
+            <th>Nombre</th>
+            <th>Cédula</th>
+            <th>Licencia</th>
+            <th>Vehículo</th>
+            <th>Matrícula</th>
+            <th>Línea</th>
+            <th>Acciones</th>
+        </tr>
+    </table>
+</div>
+
+<div id="no-conductores" style="display: none;">
+    <div class="info-card">
+        <div style="text-align: center; padding: 40px;">
+            <i class="fas fa-id-card" style="font-size: 4rem; color: #bdc3c7; margin-bottom: 20px;"></i>
+            <h3 style="color: #7f8c8d;">No hay conductores registrados</h3>
+            <p style="color: #95a5a6;">Comience registrando un nuevo conductor.</p>
+        </div>
+    </div>
+</div>
+
+<div id="error-container" style="display: none;">
+    <div class="flash-message" style="background: #f44336;">
+        Error al cargar los conductores. <button onclick="loadConductores()" style="background: none; border: 1px solid white; color: white; padding: 5px 10px; margin-left: 10px;">Reintentar</button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+    loadConductores();
+});
+
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/login';
+    }
+}
+
+async function loadConductores() {
+    const loadingDiv = document.getElementById('loading');
+    const containerDiv = document.getElementById('conductores-container');
+    const noConductoresDiv = document.getElementById('no-conductores');
+    const errorContainer = document.getElementById('error-container');
+    
+    loadingDiv.style.display = 'block';
+    containerDiv.style.display = 'none';
+    noConductoresDiv.style.display = 'none';
+    errorContainer.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/conductores');
+        
+        if (!response.ok) {
+            throw new Error('Error al obtener conductores');
+        }
+        
+        const data = await response.json();
+        const conductores = data.conductores || [];
+        
+        loadingDiv.style.display = 'none';
+        
+        if (conductores.length === 0) {
+            noConductoresDiv.style.display = 'block';
+        } else {
+            renderConductores(conductores);
+            containerDiv.style.display = 'block';
+        }
+        
+    } catch (error) {
+        console.error('Error cargando conductores:', error);
+        loadingDiv.style.display = 'none';
+        errorContainer.style.display = 'block';
+    }
+}
+
+function renderConductores(conductores) {
+    const table = document.getElementById('conductores-table');
+    
+    while(table.rows.length > 1) table.deleteRow(1);
+    
+    conductores.forEach((conductor, index) => {
+        const row = table.insertRow();
+        
+        console.log("Conductor:", conductor);
+        
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${conductor.apellido}, ${conductor.nombre}</td>
+            <td>${conductor.cedula}</td>
+            <td>${conductor.licencia}</td>
+            <td>${conductor.vehiculo_marca || ''} ${conductor.vehiculo_modelo || ''}</td>
+            <td>${conductor.vehiculo_matricula || 'N/A'}</td>
+            <td>${conductor.linea_nombre || 'N/A'}</td>
+            <td>
+                <button class="btn-small details" onclick="verConductor(${conductor.cedula})">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button class="btn-small delete" onclick="eliminarConductor(${conductor.cedula})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+    });
+}
+
+async function verConductor(cedula) {
+    window.location.href = `/ver-conductor/${cedula}`;
+}
+
+async function eliminarConductor(cedula) {
+    if (!confirm('¿Está seguro de que desea eliminar este conductor?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/conductores/${cedula}`, {
+            method: 'DELETE'
+        }); 
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Conductor eliminado correctamente');
+            loadConductores();
+        } else {
+            alert(data.error || 'Error al eliminar conductor');
+        }
+    } catch (error) {
+        console.error('Error eliminando conductor:', error);
+        alert('Error de conexión al eliminar conductor');
+    }
+}
+</script>
+{% endblock %}

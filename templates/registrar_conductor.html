@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar Conductor{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-clipboard"></i> Registro de Conductores</h2>
+<button class="btn back-btn" onclick="window.location.href='/conductores'"><i class="fas fa-arrow-left"></i> Volver a Conductores</button>
+
+<div id="loading-lineas" style="text-align: center; padding: 10px; display: none;">
+    <i class="fas fa-spinner fa-spin"></i> Cargando líneas disponibles...
+</div>
+
+<div id="error-message" style="display: none; background: #f44336; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
+<div id="success-message" style="display: none; background: #4caf50; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
+
+<form id="registroForm">
+    <input type="number" id="cedula" placeholder="Cédula" required min="1000">
+    <input type="text" id="nombre" placeholder="Nombre" required>
+    <input type="text" id="apellido" placeholder="Apellido" required>
+    <input type="text" id="licencia" placeholder="Número de Licencia" required>
+    
+    <h3><i class="fas fa-car"></i> Vehículo (opcional)</h3>
+    <input type="text" id="matricula" placeholder="Matrícula" pattern="[A-Za-z0-9\s\-]+" title="Formato: Letras, números, espacios y guiones">
+    <input type="text" id="marca" placeholder="Marca del vehículo">
+    <input type="text" id="modelo" placeholder="Modelo del vehículo">
+    <div id="loading-lineas" style="display: none; padding: 5px;">
+        <i class="fas fa-spinner fa-spin"></i> Cargando líneas...
+    </div>
+    <select id="linea_asignada" style="margin-bottom: 15px;">
+        <option value="">Seleccione línea asignada</option>
+    </select>
+    <input type="number" id="capacidad" placeholder="Capacidad de pasajeros" min="1">
+    
+    <button type="submit" id="submitBtn">Guardar Conductor</button>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+    loadLineas();
+    
+    const conductorForm = document.getElementById('registroForm');
+    conductorForm.addEventListener('submit', handleSubmit);
+});
+
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/login';
+    }
+}
+
+async function loadLineas() {
+    const loadingDiv = document.getElementById('loading-lineas');
+    const select = document.getElementById('linea_asignada');
+    
+    loadingDiv.style.display = 'block';
+    select.innerHTML = '<option value="">Cargando líneas...</option>';
+    
+    try {
+        const response = await fetch('/api/lineas');
+        const data = await response.json();
+        
+        select.innerHTML = '<option value="">Seleccione línea asignada</option>';
+        
+        if (data.lineas && data.lineas.length > 0) {
+            data.lineas.forEach(linea => {
+                const option = document.createElement('option');
+                option.value = linea.id;
+                option.textContent = linea.nombre;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando líneas:', error);
+        select.innerHTML = '<option value="">Error al cargar líneas</option>';
+    } finally {
+        loadingDiv.style.display = 'none';
+    }
+}
+
+async function handleSubmit(e) {
+    e.preventDefault();
+    
+    const errorDiv = document.getElementById('error-message');
+    const successDiv = document.getElementById('success-message');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    const cedula = parseInt(document.getElementById('cedula').value);
+    try {
+        const cedulaCheck = await fetch(`/api/conductores/${cedula}`);
+        if (cedulaCheck.status === 200) {
+            errorDiv.textContent = 'Esta cédula ya está registrada';
+            errorDiv.style.display = 'block';
+            return;
+        }
+    } catch (error) {
+        // Solo mostrar error si no es un error 404 (no encontrado)
+        if (error.response && error.response.status !== 404) {
+            console.error('Error verificando cédula:', error);
+        }
+    }
+    
+    const formData = {
+        cedula: cedula,
+        nombre: document.getElementById('nombre').value,
+        apellido: document.getElementById('apellido').value,
+        licencia: document.getElementById('licencia').value,
+        matricula: document.getElementById('matricula').value || null,
+        marca: document.getElementById('marca').value || null,
+        modelo: document.getElementById('modelo').value || null,
+        linea_asignada: document.getElementById('linea_asignada').value || null,  // CAMBIO IMPORTANTE
+        capacidad: parseInt(document.getElementById('capacidad').value) || 0
+    };
+
+    // Validación de matrícula más flexible
+    if (formData.matricula && !/^[A-Za-z0-9\s\-]+$/.test(formData.matricula)) {
+        errorDiv.textContent = 'Formato de matrícula inválido. Use letras, números, espacios y guiones.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    submitBtn.textContent = 'Guardando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/conductores', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            successDiv.textContent = data.message;
+            successDiv.style.display = 'block';
+            
+            document.getElementById('registroForm').reset();
+            
+            setTimeout(() => {
+                window.location.href = '/conductores';
+            }, 2000);
+        } else {
+            errorDiv.textContent = data.error || 'Error al registrar conductor';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error registrando conductor:', error);
+        errorDiv.textContent = 'Error de conexión. Intente nuevamente.';
+        errorDiv.style.display = 'block';
+    } finally {
+        submitBtn.textContent = 'Guardar Conductor';
+        submitBtn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Registro Inicial{% endblock %}
+
+{% block auth_content %}
+<h2>Registro Inicial</h2>
+<div id="error-message" style="display: none; background: #f44336; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
+<div id="success-message" style="display: none; background: #4caf50; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px;"></div>
+
+<form id="registroForm">
+    <input type="text" id="nombre" name="nombre" placeholder="Usuario" required>
+    <input type="password" id="contrasena" name="contrasena" placeholder="Contraseña" required>
+    <button type="submit" id="submitBtn">Crear Cuenta</button>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const registroForm = document.getElementById('registroForm');
+    registroForm.addEventListener('submit', handleSubmit);
+});
+
+async function handleSubmit(e) {
+    e.preventDefault();
+    
+    const errorDiv = document.getElementById('error-message');
+    const successDiv = document.getElementById('success-message');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    const formData = {
+        nombre: document.getElementById('nombre').value,
+        contrasena: document.getElementById('contrasena').value
+    };
+    
+    submitBtn.textContent = 'Creando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/auth/register-initial', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            successDiv.textContent = data.message;
+            successDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 2000);
+        } else {
+            errorDiv.textContent = data.error || 'Error al crear usuario';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error creando usuario:', error);
+        errorDiv.textContent = 'Error de conexión. Intente nuevamente.';
+        errorDiv.style.display = 'block';
+    } finally {
+        submitBtn.textContent = 'Crear Cuenta';
+        submitBtn.disabled = false;
+    }
+}
+</script>
+{% endblock %}
