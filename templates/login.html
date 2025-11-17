@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiRutas - Inicio de Sesión</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="brand-section">
+            <div class="logo">
+                <div class="logo-text">OptiRutas</div>
+            </div>
+            <div class="subtitle">Líneas InterUrbanas</div>
+            <div class="description">
+                <p>Optimiza tus rutas de transporte para ofrecer la mejor experiencia de viaje. Conectamos destinos con eficiencia, seguridad y comodidad.</p>
+            </div>
+            <ul class="features">
+                <li><i class="fas fa-check-circle"></i> Optimización de rutas en tiempo real</li>
+                <li><i class="fas fa-check-circle"></i> Gestión completa de conductores y vehículos</li>
+                <li><i class="fas fa-check-circle"></i> Seguimiento de viajes y análisis de datos</li>
+                <li><i class="fas fa-check-circle"></i> Interfaz intuitiva y fácil de usar</li>
+            </ul>
+        </div>
+        
+        <div class="login-section">
+            <h2><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</h2>
+            
+            <div id="error-message" class="flash-message error hidden"></div>
+            <div id="setup-message" class="flash-message warning hidden">
+                No hay usuarios registrados. Creando usuario inicial...
+            </div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="nombre">Usuario</label>
+                    <input type="text" id="nombre" class="form-control" placeholder="Ingresar nombre de usuario" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contrasena">Contraseña</label>
+                    <input type="password" id="contrasena" class="form-control" placeholder="Ingresar contraseña" required>
+                </div>
+                
+                <button type="submit" id="loginBtn" class="btn">
+                    <i class="fas fa-sign-in-alt"></i> Ingresar
+                </button>
+            </form>
+            
+            <div id="initialSetup" class="hidden">
+                <h3><i class="fas fa-user-plus"></i> Configuración Inicial</h3>
+                <p>Crea el primer usuario administrador:</p>
+                <form id="setupForm">
+                    <div class="form-group">
+                        <label for="setupNombre">Nombre de usuario</label>
+                        <input type="text" id="setupNombre" class="form-control" placeholder="Nombre de usuario" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="setupContrasena">Contraseña</label>
+                        <input type="password" id="setupContrasena" class="form-control" placeholder="Contraseña" required>
+                    </div>
+                    
+                    <button type="submit" class="btn">
+                        <i class="fas fa-user-plus"></i> Crear Usuario
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('loginForm');
+            const setupForm = document.getElementById('setupForm');
+            const errorDiv = document.getElementById('error-message');
+            const setupDiv = document.getElementById('setup-message');
+            const initialSetupDiv = document.getElementById('initialSetup');
+            const loginBtn = document.getElementById('loginBtn');
+
+            checkAuthStatus();
+
+            async function checkAuthStatus() {
+                try {
+                    const response = await fetch('/api/auth/status');
+                    const data = await response.json();
+                    if (data.authenticated) {
+                        window.location.href = '/dashboard';
+                    }
+                } catch (error) {
+                    console.log('No autenticado');
+                }
+            }
+
+            function showError(message) {
+                errorDiv.textContent = message;
+                errorDiv.classList.remove('hidden');
+                setTimeout(() => {
+                    errorDiv.classList.add('hidden');
+                }, 5000);
+            }
+
+            function showSetupMessage() {
+                setupDiv.classList.remove('hidden');
+                setTimeout(() => {
+                    setupDiv.classList.add('hidden');
+                }, 3000);
+            }
+
+            loginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const nombre = document.getElementById('nombre').value;
+                const contrasena = document.getElementById('contrasena').value;
+                
+                loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ingresando...';
+                loginBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            nombre: nombre,
+                            contrasena: contrasena
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        if (data.authenticated) {
+                            window.location.href = '/dashboard';
+                        }
+                    } else {
+                        if (data.needs_initial_setup) {
+                            showSetupMessage();
+                            loginForm.classList.add('hidden');
+                            initialSetupDiv.classList.remove('hidden');
+                        } else {
+                            showError(data.error || 'Error al iniciar sesión');
+                        }
+                    }
+                } catch (error) {
+                    showError('Error de conexión. Intenta nuevamente.');
+                } finally {
+                    loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Ingresar';
+                    loginBtn.disabled = false;
+                }
+            });
+
+            setupForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const nombre = document.getElementById('setupNombre').value;
+                const contrasena = document.getElementById('setupContrasena').value;
+
+                try {
+                    const response = await fetch('/api/auth/register-initial', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            nombre: nombre,
+                            contrasena: contrasena
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        alert('Usuario creado correctamente. Ahora puedes iniciar sesión.');
+                        initialSetupDiv.classList.add('hidden');
+                        loginForm.classList.remove('hidden');
+                        document.getElementById('nombre').value = nombre;
+                    } else {
+                        showError(data.error || 'Error al crear usuario');
+                    }
+                } catch (error) {
+                    showError('Error de conexión. Intenta nuevamente.');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

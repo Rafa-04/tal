@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Viajes{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-bus"></i> Gestión de Viajes</h2>
+
+<div class="mb-20">
+    <button class="btn" onclick="window.location.href='/registrar-viaje'">
+        <i class="fas fa-plus"></i> Nuevo Viaje
+    </button>
+</div>
+
+<div id="loading" class="loading">
+    <i class="fas fa-spinner fa-spin"></i> Cargando viajes...
+</div>
+
+<div id="viajes-container" class="hidden">
+    <table id="viajes-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Ruta</th>
+                <th>Conductor</th>
+                <th>Fechas</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Datos cargados dinámicamente -->
+        </tbody>
+    </table>
+</div>
+
+<div id="no-viajes" class="empty-state hidden">
+    <i class="fas fa-bus"></i>
+    <h3>No hay viajes registrados</h3>
+    <p>Comience programando un nuevo viaje.</p>
+</div>
+
+<div id="error-container" class="error-container hidden">
+    <div class="flash-message error">
+        Error al cargar los viajes. 
+        <button onclick="loadViajes()" class="btn-retry">
+            <i class="fas fa-redo"></i> Reintentar
+        </button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+    loadViajes();
+});
+
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/login';
+    }
+}
+
+async function loadViajes() {
+    const loadingDiv = document.getElementById('loading');
+    const containerDiv = document.getElementById('viajes-container');
+    const noViajesDiv = document.getElementById('no-viajes');
+    const errorContainer = document.getElementById('error-container');
+    
+    loadingDiv.classList.remove('hidden');
+    containerDiv.classList.add('hidden');
+    noViajesDiv.classList.add('hidden');
+    errorContainer.classList.add('hidden');
+
+    try {
+        const response = await fetch('/api/viajes');
+        
+        if (!response.ok) {
+            throw new Error('Error al obtener viajes');
+        }
+        
+        const data = await response.json();
+        const viajes = data.viajes || [];
+        
+        loadingDiv.classList.add('hidden');
+        
+        if (viajes.length === 0) {
+            noViajesDiv.classList.remove('hidden');
+        } else {
+            renderViajes(viajes);
+            containerDiv.classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        console.error('Error cargando viajes:', error);
+        loadingDiv.classList.add('hidden');
+        errorContainer.classList.remove('hidden');
+    }
+}
+
+function renderViajes(viajes) {
+    const table = document.getElementById('viajes-table');
+    const tbody = table.querySelector('tbody');
+    
+    tbody.innerHTML = '';
+    
+    viajes.forEach((viaje, index) => {
+        const row = tbody.insertRow();
+        
+        const fechaSalida = new Date(viaje.fecha_salida);
+        const fechaLlegada = new Date(viaje.fecha_llegada);
+        
+        const options = { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit', 
+            minute: '2-digit'
+        };
+        
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${viaje.rutas_asignadas}</td>
+            <td>${viaje.apellido}, ${viaje.nombre}</td>
+            <td>
+                <strong>Salida:</strong> ${fechaSalida.toLocaleString('es-ES', options)}<br>
+                <strong>Llegada:</strong> ${fechaLlegada.toLocaleString('es-ES', options)}
+            </td>
+            <td>
+                <button class="btn-small details" onclick="verViaje(${viaje.id})">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button class="btn-small delete" onclick="eliminarViaje(${viaje.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button class="btn-small map-btn" onclick="abrirMapaParaViaje(${viaje.id})">
+                    <i class="fas fa-map"></i> Ruta
+                </button>
+            </td>
+        `;
+    });
+}
+
+function verViaje(id) {
+    window.location.href = `/ver-viaje/${id}`;
+}
+
+function abrirMapaParaViaje(viajeId) {
+    window.location.href = `/ver-mapa-ruta/${viajeId}`;
+}
+
+async function eliminarViaje(id) {
+    if (!confirm('¿Está seguro de que desea eliminar este viaje?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/viajes/${id}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Viaje eliminado correctamente');
+            loadViajes(); 
+        } else {
+            alert(data.error || 'Error al eliminar viaje');
+        }
+    } catch (error) {
+        console.error('Error eliminando viaje:', error);
+        alert('Error de conexión al eliminar viaje');
+    }
+}
+</script>
+{% endblock %}

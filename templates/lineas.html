@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Líneas{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-layer-group"></i> Gestión de Líneas</h2>
+
+<div class="mb-20">
+    <button class="btn" onclick="window.location.href='/registrar-linea'">
+        <i class="fas fa-plus"></i> Nueva Línea
+    </button>
+</div>
+
+<div id="loading" class="loading">
+    <i class="fas fa-spinner fa-spin"></i> Cargando líneas...
+</div>
+
+<div id="lineas-container" class="hidden">
+    <table id="lineas-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Logo</th>
+                <th>Nombre de Línea</th>
+                <th>Descripción</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Datos cargados dinámicamente -->
+        </tbody>
+    </table>
+</div>
+
+<div id="no-lineas" class="empty-state hidden">
+    <i class="fas fa-layer-group"></i>
+    <h3>No hay líneas registradas</h3>
+    <p>Comience registrando una nueva línea de transporte.</p>
+</div>
+
+<div id="error-container" class="error-container hidden">
+    <div class="flash-message error">
+        Error al cargar las líneas. 
+        <button onclick="loadLineas()" class="btn-retry">
+            <i class="fas fa-redo"></i> Reintentar
+        </button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+    loadLineas();
+});
+
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            window.location.href = '/';
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/';
+    }
+}
+
+async function loadLineas() {
+    const loadingDiv = document.getElementById('loading');
+    const containerDiv = document.getElementById('lineas-container');
+    const noLineasDiv = document.getElementById('no-lineas');
+    const errorContainer = document.getElementById('error-container');
+    
+    loadingDiv.classList.remove('hidden');
+    containerDiv.classList.add('hidden');
+    noLineasDiv.classList.add('hidden');
+    errorContainer.classList.add('hidden');
+
+    try {
+        const response = await fetch('/api/lineas');
+        
+        if (!response.ok) {
+            throw new Error('Error al obtener líneas');
+        }
+        
+        const data = await response.json();
+        const lineas = data.lineas || [];
+        
+        loadingDiv.classList.add('hidden');
+        
+        if (lineas.length === 0) {
+            noLineasDiv.classList.remove('hidden');
+        } else {
+            renderLineas(lineas);
+            containerDiv.classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        console.error('Error cargando líneas:', error);
+        loadingDiv.classList.add('hidden');
+        errorContainer.classList.remove('hidden');
+    }
+}
+
+function renderLineas(lineas) {
+    const table = document.getElementById('lineas-table');
+    const tbody = table.querySelector('tbody');
+    
+    tbody.innerHTML = '';
+    
+    lineas.forEach((linea, index) => {
+        const row = tbody.insertRow();
+        
+        const logoHtml = linea.imagen_logo 
+            ? `<img src="/static/uploads/logos/${linea.imagen_logo}" alt="Logo ${linea.nombre}" class="logo-thumbnail">`
+            : `<div class="logo-placeholder"><i class="fas fa-image"></i></div>`;
+        
+        const descripcionCorta = linea.descripcion && linea.descripcion.length > 50 
+            ? linea.descripcion.substring(0, 50) + '...'
+            : linea.descripcion || '';
+        
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${logoHtml}</td>
+            <td>${linea.nombre}</td>
+            <td>${descripcionCorta}</td>
+            <td>
+                <button class="btn-small details" onclick="verLinea(${linea.id})">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button class="btn-small delete" onclick="eliminarLinea(${linea.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+    });
+}
+
+async function verLinea(id) {
+    window.location.href = `/ver-linea/${id}`;
+}
+
+async function eliminarLinea(id) {
+    if (!confirm('¿Está seguro de que desea eliminar esta línea?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/lineas/${id}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Línea eliminada correctamente');
+            loadLineas();
+        } else {
+            alert(data.error || 'Error al eliminar línea');
+        }
+    } catch (error) {
+        console.error('Error eliminando línea:', error);
+        alert('Error de conexión al eliminar línea');
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Registro Inicial{% endblock %}
+
+{% block auth_content %}
+<div class="auth-container">
+    <h2><i class="fas fa-user-plus"></i> Registro Inicial</h2>
+    
+    <div id="error-message" class="flash-message error hidden"></div>
+    <div id="success-message" class="flash-message success hidden"></div>
+
+    <form id="registroForm">
+        <div class="form-group">
+            <label for="nombre">Usuario</label>
+            <input type="text" id="nombre" class="form-control" placeholder="Usuario" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="contrasena">Contraseña</label>
+            <input type="password" id="contrasena" class="form-control" placeholder="Contraseña" required>
+        </div>
+        
+        <button type="submit" id="submitBtn" class="btn">
+            <i class="fas fa-user-plus"></i> Crear Cuenta
+        </button>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const registroForm = document.getElementById('registroForm');
+    registroForm.addEventListener('submit', handleSubmit);
+});
+
+async function handleSubmit(e) {
+    e.preventDefault();
+    
+    const errorDiv = document.getElementById('error-message');
+    const successDiv = document.getElementById('success-message');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    const formData = {
+        nombre: document.getElementById('nombre').value,
+        contrasena: document.getElementById('contrasena').value
+    };
+    
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/auth/register-initial', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            successDiv.textContent = data.message;
+            successDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 2000);
+        } else {
+            errorDiv.textContent = data.error || 'Error al crear usuario';
+            errorDiv.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Error creando usuario:', error);
+        errorDiv.textContent = 'Error de conexión. Intente nuevamente.';
+        errorDiv.classList.remove('hidden');
+    } finally {
+        submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Crear Cuenta';
+        submitBtn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

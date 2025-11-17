@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar Viaje{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-calendar"></i> Programar Viaje</h2>
+
+<div class="mb-20">
+    <button class="btn back-btn" onclick="window.location.href='/viajes'">
+        <i class="fas fa-arrow-left"></i> Volver a Viajes
+    </button>
+</div>
+
+<div id="loading" class="loading">
+    <i class="fas fa-spinner fa-spin"></i> Cargando conductores...
+</div>
+
+<div id="form-container" class="hidden">
+    <div id="error-message" class="flash-message error hidden"></div>
+    <div id="success-message" class="flash-message success hidden"></div>
+
+    <form id="viajeForm">
+        <div class="form-group">
+            <label for="paradas">Ruta-Destino:</label>
+            <input type="text" id="paradas" class="form-control" placeholder="Ej: Trujillo-Caracas" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="rutas">Trayectoria:</label>
+            <input type="text" id="rutas" class="form-control" placeholder="Ej: Trujillo, Carabobo, Caracas" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Ruta en Mapa:</label>
+            <button type="button" class="btn btn-map" onclick="abrirMapaParaNuevoViaje()">
+                <i class="fas fa-map"></i> Definir Ruta en Mapa
+            </button>
+            <input type="hidden" id="waypoints" name="waypoints">
+            <input type="hidden" id="distancia" name="distancia">
+            <input type="hidden" id="tiempo" name="tiempo">
+            <div id="route-summary" class="route-summary">
+                <h4><i class="fas fa-check-circle"></i> Ruta Definida</h4>
+                <div class="route-detail">
+                    <i class="fas fa-road"></i>
+                    <strong>Distancia calculada:</strong> 
+                    <span id="display-distancia">0</span> km
+                </div>
+                <div class="route-detail">
+                    <i class="fas fa-clock"></i>
+                    <strong>Tiempo estimado:</strong> 
+                    <span id="display-tiempo">0</span>
+                </div>
+                <div class="route-detail">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <strong>Paradas:</strong> 
+                    <span id="display-paradas">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="fecha_salida">Fecha y Hora de Salida:</label>
+            <input type="datetime-local" id="fecha_salida" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="fecha_llegada">Fecha y Hora de Llegada:</label>
+            <input type="datetime-local" id="fecha_llegada" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="conductor_ci">Conductor:</label>
+            <select id="conductor_ci" class="form-control" required>
+                <option value="">Seleccione conductor</option>
+            </select>
+        </div>
+        
+        <button type="submit" id="submitBtn" class="btn">
+            <i class="fas fa-plus"></i> Asignar Viaje
+        </button>
+    </form>
+</div>
+
+<div id="error-container" class="error-container hidden">
+    <div class="flash-message error">
+        Error al cargar los conductores. 
+        <button onclick="loadConductores()" class="btn-retry">
+            <i class="fas fa-redo"></i> Reintentar
+        </button>
+    </div>
+</div>
+
+<script>
+let temporalWaypoints = [];
+let temporalDistance = 0;
+let temporalTime = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+    loadConductores();
+    
+    const viajeForm = document.getElementById('viajeForm');
+    viajeForm.addEventListener('submit', handleSubmit);
+    
+    checkForSavedRoute();
+});
+
+function abrirMapaParaNuevoViaje() {
+    const formData = {
+        paradas: document.getElementById('paradas').value,
+        rutas: document.getElementById('rutas').value,
+        fecha_salida: document.getElementById('fecha_salida').value,
+        fecha_llegada: document.getElementById('fecha_llegada').value,
+        conductor_ci: document.getElementById('conductor_ci').value
+    };
+    
+    sessionStorage.setItem('tempFormData', JSON.stringify(formData));
+    sessionStorage.setItem('creatingNewRoute', 'true');
+    window.location.href = '/mapa-rutas';
+}
+
+function checkForSavedRoute() {
+    const tempWaypoints = sessionStorage.getItem('temporalWaypoints');
+    const tempDistance = sessionStorage.getItem('temporalDistance');
+    const tempTime = sessionStorage.getItem('temporalTime');
+    
+    if (tempWaypoints && tempDistance) {
+        try {
+            temporalWaypoints = JSON.parse(tempWaypoints);
+            temporalDistance = parseFloat(tempDistance);
+            temporalTime = tempTime || '0';
+            
+            document.getElementById('waypoints').value = JSON.stringify(temporalWaypoints);
+            document.getElementById('distancia').value = temporalDistance.toString();
+            document.getElementById('tiempo').value = temporalTime;
+            
+            document.getElementById('display-distancia').textContent = temporalDistance.toFixed(2);
+            document.getElementById('display-tiempo').textContent = temporalTime;
+            document.getElementById('display-paradas').textContent = temporalWaypoints.length;
+            document.getElementById('route-summary').classList.remove('hidden');
+            
+            sessionStorage.removeItem('temporalWaypoints');
+            sessionStorage.removeItem('temporalDistance');
+            sessionStorage.removeItem('temporalTime');
+            
+        } catch (error) {
+            console.error('Error al cargar datos de ruta:', error);
+        }
+    }
+    
+    const tempFormData = sessionStorage.getItem('tempFormData');
+    if (tempFormData) {
+        try {
+            const formData = JSON.parse(tempFormData);
+            document.getElementById('paradas').value = formData.paradas || '';
+            document.getElementById('rutas').value = formData.rutas || '';
+            document.getElementById('fecha_salida').value = formData.fecha_salida || '';
+            document.getElementById('fecha_llegada').value = formData.fecha_llegada || '';
+            
+            setTimeout(() => {
+                if (formData.conductor_ci) {
+                    document.getElementById('conductor_ci').value = formData.conductor_ci;
+                }
+            }, 1000);
+            
+            sessionStorage.removeItem('tempFormData');
+        } catch (error) {
+            console.error('Error al restaurar datos del formulario:', error);
+        }
+    }
+}
+
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = ('/login');
+    }
+}
+
+async function loadConductores() {
+    const loadingDiv = document.getElementById('loading');
+    const formContainer = document.getElementById('form-container');
+    const errorContainer = document.getElementById('error-container');
+    
+    loadingDiv.classList.remove('hidden');
+    formContainer.classList.add('hidden');
+    errorContainer.classList.add('hidden');
+
+    try {
+        const response = await fetch('/api/conductores');
+        
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const conductores = data.conductores || [];
+        
+        const select = document.getElementById('conductor_ci');
+        select.innerHTML = '<option value="">Seleccione conductor</option>';
+        
+        const conductoresConVehiculo = conductores.filter(conductor => conductor.vehiculo_matricula);
+        
+        if (conductoresConVehiculo.length === 0) {
+            select.innerHTML = '<option value="">No hay conductores con vehículos asignados</option>';
+            showError('No hay conductores con vehículos asignados. Debe registrar vehículos para los conductores primero.');
+        } else {
+            conductoresConVehiculo.forEach(conductor => {
+                const option = document.createElement('option');
+                option.value = conductor.cedula;
+                option.textContent = `${conductor.apellido}, ${conductor.nombre} (CI: ${conductor.cedula}) - ${conductor.vehiculo_marca} ${conductor.vehiculo_modelo || ''} [${conductor.vehiculo_matricula}]`;
+                select.appendChild(option);
+            });
+        }
+        
+        loadingDiv.classList.add('hidden');
+        formContainer.classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('Error cargando conductores:', error);
+        loadingDiv.classList.add('hidden');
+        errorContainer.classList.remove('hidden');
+        errorContainer.querySelector('.flash-message').textContent = `Error: ${error.message}`;
+    }
+}
+
+function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+    errorDiv.classList.remove('hidden');
+    errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+        errorDiv.classList.add('hidden');
+    }, 8000);
+}
+
+function showSuccess(message) {
+    const successDiv = document.getElementById('success-message');
+    successDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+    successDiv.classList.remove('hidden');
+    successDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+        successDiv.classList.add('hidden');
+    }, 5000);
+}
+
+async function handleSubmit(e) {
+    e.preventDefault();
+    
+    const errorDiv = document.getElementById('error-message');
+    const successDiv = document.getElementById('success-message');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    const paradas = document.getElementById('paradas').value.trim();
+    const rutas = document.getElementById('rutas').value.trim();
+    const fechaSalidaInput = document.getElementById('fecha_salida');
+    const fechaLlegadaInput = document.getElementById('fecha_llegada');
+    const conductorCi = document.getElementById('conductor_ci').value;
+    const waypoints = document.getElementById('waypoints').value;
+    const distancia = document.getElementById('distancia').value;
+    
+    if (!paradas) {
+        showError('El campo "Paradas" es requerido');
+        return;
+    }
+    
+    if (!rutas) {
+        showError('El campo "Rutas asignadas" es requerido');
+        return;
+    }
+    
+    if (!fechaSalidaInput.value) {
+        showError('La fecha de salida es requerida');
+        return;
+    }
+    
+    if (!fechaLlegadaInput.value) {
+        showError('La fecha de llegada es requerida');
+        return;
+    }
+    
+    if (!conductorCi) {
+        showError('Debe seleccionar un conductor');
+        return;
+    }
+    
+    if (!waypoints || waypoints === '[]' || waypoints === '') {
+        showError('Debe definir la ruta en el mapa antes de registrar el viaje');
+        return;
+    }
+    
+    if (!distancia || parseFloat(distancia) <= 0) {
+        showError('La distancia de la ruta debe ser mayor a 0. Recalcule la ruta en el mapa.');
+        return;
+    }
+    
+    const fechaSalida = new Date(fechaSalidaInput.value);
+    const fechaLlegada = new Date(fechaLlegadaInput.value);
+    
+    if (fechaLlegada <= fechaSalida) {
+        showError('La fecha de llegada debe ser posterior a la fecha de salida');
+        return;
+    }
+    
+    let waypointsArray;
+    try {
+        waypointsArray = JSON.parse(waypoints);
+        if (!Array.isArray(waypointsArray) || waypointsArray.length < 2) {
+            throw new Error('Waypoints inválidos');
+        }
+    } catch (error) {
+        showError('Error en los datos de la ruta. Vuelva a definir la ruta en el mapa.');
+        return;
+    }
+    
+    const formData = {
+        paradas: paradas,
+        rutas: rutas,
+        fecha_salida: fechaSalida.toISOString().replace('Z', ''),
+        fecha_llegada: fechaLlegada.toISOString().replace('Z', ''),
+        conductor_ci: parseInt(conductorCi),
+        waypoints: waypointsArray,
+        distancia: parseFloat(distancia)
+    };
+    
+    console.log('Datos a enviar:', formData);
+    
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Asignando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/viajes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showSuccess(data.message || 'Viaje registrado correctamente');
+            
+            document.getElementById('viajeForm').reset();
+            document.getElementById('route-summary').classList.add('hidden');
+            temporalWaypoints = [];
+            temporalDistance = 0;
+            temporalTime = '';
+            
+            setTimeout(() => {
+                window.location.href = '/viajes';
+            }, 2000);
+        } else {
+            console.error('Error del servidor:', data);
+            
+            if (data.error === 'El conductor no tiene vehículo asignado') {
+                showError(`${data.error}. ${data.suggestion || ''}`);
+            } else if (data.details) {
+                showError(`Error de base de datos: ${data.details}`);
+            } else {
+                showError(data.error || 'Error al registrar viaje');
+            }
+        }
+    } catch (error) {
+        console.error('Error registrando viaje:', error);
+        showError('Error de conexión. Intente nuevamente.');
+    } finally {
+        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Asignar Viaje';
+        submitBtn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

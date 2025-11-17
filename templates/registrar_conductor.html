@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar Conductor{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-clipboard"></i> Registro de Conductores</h2>
+
+<div class="mb-20">
+    <button class="btn back-btn" onclick="window.location.href='/conductores'">
+        <i class="fas fa-arrow-left"></i> Volver a Conductores
+    </button>
+</div>
+
+<div id="loading-lineas" class="loading hidden">
+    <i class="fas fa-spinner fa-spin"></i> Cargando líneas disponibles...
+</div>
+
+<div id="error-message" class="flash-message error hidden"></div>
+<div id="success-message" class="flash-message success hidden"></div>
+
+<form id="registroForm">
+    <div class="form-group">
+        <label for="cedula">Cédula</label>
+        <input type="number" id="cedula" class="form-control" placeholder="Cédula" required min="1000">
+    </div>
+    
+    <div class="form-group">
+        <label for="nombre">Nombre</label>
+        <input type="text" id="nombre" class="form-control" placeholder="Nombre" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="apellido">Apellido</label>
+        <input type="text" id="apellido" class="form-control" placeholder="Apellido" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="licencia">Número de Licencia</label>
+        <input type="text" id="licencia" class="form-control" placeholder="Número de Licencia" required>
+    </div>
+    
+    <div class="info-card">
+        <h3><i class="fas fa-car"></i> Vehículo (opcional)</h3>
+        
+        <div class="form-group">
+            <label for="matricula">Matrícula</label>
+            <input type="text" id="matricula" class="form-control" placeholder="Matrícula" 
+                   pattern="[A-Za-z0-9\s\-]+" 
+                   title="Formato: Letras, números, espacios y guiones"
+                   maxlength="20"
+                   required>
+        </div>
+        
+        <div class="form-group">
+            <label for="marca">Marca del vehículo</label>
+            <input type="text" id="marca" class="form-control" placeholder="Marca del vehículo">
+        </div>
+        
+        <div class="form-group">
+            <label for="modelo">Modelo del vehículo</label>
+            <input type="text" id="modelo" class="form-control" placeholder="Modelo del vehículo">
+        </div>
+        
+        <div class="form-group">
+            <label for="linea_asignada">Línea Asignada</label>
+            <select id="linea_asignada" class="form-control">
+                <option value="">Seleccione línea asignada</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="capacidad">Capacidad de pasajeros</label>
+            <input type="number" id="capacidad" class="form-control" placeholder="Capacidad de pasajeros" min="1">
+        </div>
+    </div>
+    
+    <button type="submit" id="submitBtn" class="btn">
+        <i class="fas fa-save"></i> Guardar Conductor
+    </button>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+    loadLineas();
+    
+    const conductorForm = document.getElementById('registroForm');
+    conductorForm.addEventListener('submit', handleSubmit);
+});
+
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/login';
+    }
+}
+
+async function loadLineas() {
+    const loadingDiv = document.getElementById('loading-lineas');
+    const select = document.getElementById('linea_asignada');
+    
+    loadingDiv.classList.remove('hidden');
+    select.innerHTML = '<option value="">Cargando líneas...</option>';
+    
+    try {
+        const response = await fetch('/api/lineas');
+        const data = await response.json();
+        
+        select.innerHTML = '<option value="">Seleccione línea asignada</option>';
+        
+        if (data.lineas && data.lineas.length > 0) {
+            data.lineas.forEach(linea => {
+                const option = document.createElement('option');
+                option.value = linea.id;
+                option.textContent = linea.nombre;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando líneas:', error);
+        select.innerHTML = '<option value="">Error al cargar líneas</option>';
+    } finally {
+        loadingDiv.classList.add('hidden');
+    }
+}
+
+async function handleSubmit(e) {
+    e.preventDefault();
+    
+    const errorDiv = document.getElementById('error-message');
+    const successDiv = document.getElementById('success-message');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    const cedula = parseInt(document.getElementById('cedula').value);
+    try {
+        const cedulaCheck = await fetch(`/api/conductores/${cedula}`);
+        if (cedulaCheck.status === 200) {
+            errorDiv.textContent = 'Esta cédula ya está registrada';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+    } catch (error) {
+        // Solo mostrar error si no es un error 404 (no encontrado)
+        if (error.response && error.response.status !== 404) {
+            console.error('Error verificando cédula:', error);
+        }
+    }
+    
+    const formData = {
+        cedula: cedula,
+        nombre: document.getElementById('nombre').value,
+        apellido: document.getElementById('apellido').value,
+        licencia: document.getElementById('licencia').value,
+        matricula: document.getElementById('matricula').value || null,
+        marca: document.getElementById('marca').value || null,
+        modelo: document.getElementById('modelo').value || null,
+        linea_asignada: document.getElementById('linea_asignada').value || null,
+        capacidad: parseInt(document.getElementById('capacidad').value) || 0
+    };
+
+    // Validación de matrícula más flexible
+    if (formData.matricula && !/^[A-Za-z0-9\s\-]+$/.test(formData.matricula)) {
+        errorDiv.textContent = 'Formato de matrícula inválido. Use letras, números, espacios y guiones.';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/conductores', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            successDiv.textContent = data.message;
+            successDiv.classList.remove('hidden');
+            
+            document.getElementById('registroForm').reset();
+            
+            setTimeout(() => {
+                window.location.href = '/conductores';
+            }, 2000);
+        } else {
+            errorDiv.textContent = data.error || 'Error al registrar conductor';
+            errorDiv.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Error registrando conductor:', error);
+        errorDiv.textContent = 'Error de conexión. Intente nuevamente.';
+        errorDiv.classList.remove('hidden');
+    } finally {
+        submitBtn.innerHTML = '<i class="fas fa-save"></i> Guardar Conductor';
+        submitBtn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

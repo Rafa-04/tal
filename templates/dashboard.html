@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Panel de Control{% endblock %}
+
+{% block content %}
+<h1><i class="fas fa-tachometer-alt"></i> Panel de Control</h1>
+
+<div id="loading" class="loading">
+    <i class="fas fa-spinner fa-spin"></i> Cargando estadísticas...
+</div>
+
+<div class="stats" id="statsContainer">
+    <div class="stat-card">
+        <h3>Conductores Registrados</h3>
+        <p id="totalConductores">0</p>
+    </div>
+    <div class="stat-card">
+        <h3>Viajes Programados</h3>
+        <p id="totalViajes">0</p>
+    </div>
+    <div class="stat-card">
+        <h3>Líneas Activas</h3>
+        <p id="totalLineas">0</p>
+    </div>
+</div>
+
+<div id="error-container" class="error-container hidden">
+    <div class="flash-message error">
+        Error al cargar las estadísticas. 
+        <button onclick="loadDashboard()" class="btn-retry">
+            <i class="fas fa-redo"></i> Reintentar
+        </button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+    loadDashboard();
+});
+
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        
+        if (!data.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/login';
+    }
+}
+
+async function loadDashboard() {
+    const loadingDiv = document.getElementById('loading');
+    const statsContainer = document.getElementById('statsContainer');
+    const errorContainer = document.getElementById('error-container');
+    
+    loadingDiv.classList.remove('hidden');
+    statsContainer.classList.add('hidden');
+    errorContainer.classList.add('hidden');
+
+    try {
+        const response = await fetch('/api/dashboard');
+        
+        if (!response.ok) {
+            throw new Error('Error al obtener datos');
+        }
+        
+        const data = await response.json();
+        
+        document.getElementById('totalConductores').textContent = data.total_conductores || 0;
+        document.getElementById('totalViajes').textContent = data.total_viajes || 0;
+        document.getElementById('totalLineas').textContent = data.total_lineas || 0;
+        
+        loadingDiv.classList.add('hidden');
+        statsContainer.classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('Error cargando dashboard:', error);
+        loadingDiv.classList.add('hidden');
+        errorContainer.classList.remove('hidden');
+    }
+}
+</script>
+{% endblock %}
